@@ -1,0 +1,1 @@
+CS 8803 First programming assignment. Android application that takes in user input and selected target langauge (Spanish, Simplified Chinese, or Japanese) and translates the text via OpenL Translate API. For API key, ask Tristan to send it to you.
