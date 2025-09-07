@@ -11,13 +11,19 @@ import android.widget.Toast;
 
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
-import kotlinx.coroutines.ExecutorCoroutineDispatcher;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -29,17 +35,24 @@ import org.json.JSONObject;
 
 
 
+
+
 public class MainActivity extends AppCompatActivity {
 
     private RadioGroup languageGroup;
     private TextInputEditText inputField;
-    private Button translate_btn;
-    private TextView outputlabel, outputText;
+    private Button translate_btn, historyToggleBtn;
+    private TextView outputlabel, outputText,historyEmptyMessage;
     private MaterialCardView outputCard;
+    private RecyclerView historyRecycleView;
 
-    private String selectedLangauge = "";
+    private String selectedLanguage = "";
     private ExecutorService executorService;
     private OkHttpClient httpClient;
+
+    private FirebaseFirestore db;
+    private TranslationHistoryAdapter historyAdapter;
+    private boolean isHistoryVisible = false;
 
     //API related configurations
     private static final String SPANISH_CODE = "es";
@@ -59,21 +72,40 @@ public class MainActivity extends AppCompatActivity {
         executorService = Executors.newSingleThreadExecutor();
         httpClient = new OkHttpClient();
 
+        //Initialize firebase
+        db = FirebaseFirestore.getInstance();
+        historyAdapter = new TranslationHistoryAdapter();
+
+
         //Components and listeners
         initializeViews();
         setupListeners();
+
+        loadTranslationHistory();
     }
 
     private void initializeViews() {
         languageGroup = findViewById(R.id.lang_group);
         inputField = findViewById(R.id.inputField);
         translate_btn = findViewById(R.id.translate_btn);
+        historyToggleBtn = findViewById(R.id.historyToggleBtn);
         outputlabel = findViewById(R.id.outputLabel);
         outputText = findViewById(R.id.outputtxt);
         outputCard = findViewById(R.id.outputCard);
+        historyRecycleView = findViewById(R.id.historyRecycleView);
+        historyEmptyMessage = findViewById(R.id.historyEmptyMessage);
 
         //Translate button should be disabled
         translate_btn.setEnabled(false);
+
+        //Recycler Views
+        historyRecycleView.setLayoutManager(new LinearLayoutManager(this));
+        historyRecycleView.setAdapter(historyAdapter);
+
+        historyRecycleView.setVisibility(View.GONE);
+        historyEmptyMessage.setVisibility(View.GONE);
+
+        //lEFT OFF HERE
 
     }
 
@@ -114,17 +146,24 @@ public class MainActivity extends AppCompatActivity {
                 performTranslation();
             }
         });
+
+        historyToggleBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleHistory();
+            }
+        });
     }
 
     private void handleLanguageSelection(int checkedId) {
         if (checkedId == R.id.spanish_radioButton) {
-            selectedLangauge = SPANISH_CODE;
+            selectedLanguage = SPANISH_CODE;
         } else if (checkedId == R.id.chz_radioButton) {
-            selectedLangauge = CHINESE_CODE;
+            selectedLanguage = CHINESE_CODE;
         } else if (checkedId == R.id.jap_radioButton) {
-            selectedLangauge = JAPANESE_CODE;
+            selectedLanguage = JAPANESE_CODE;
         } else {
-            selectedLangauge = "";
+            selectedLanguage = "";
         }
     }
 
@@ -133,7 +172,7 @@ public class MainActivity extends AppCompatActivity {
         String inputText = inputField.getText() != null ?
                 inputField.getText().toString().trim() : "";
         boolean isText = !inputText.isEmpty();
-        boolean haslanguage = !selectedLangauge.isEmpty();
+        boolean haslanguage = !selectedLanguage.isEmpty();
 
         translate_btn.setEnabled(isText && haslanguage);
     }
@@ -143,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
     private void performTranslation() {
         String textToTranslate = inputField.getText().toString().trim();
 
-        if (textToTranslate.isEmpty() || selectedLangauge.isEmpty()) {
+        if (textToTranslate.isEmpty() || selectedLanguage.isEmpty()) {
             Toast.makeText(this, "Please enter text and select a language", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -153,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    String translatedText = translateText(textToTranslate, selectedLangauge);
+                    String translatedText = translateText(textToTranslate, selectedLanguage);
 
                     //Update UI
                     runOnUiThread(new Runnable() {
@@ -161,6 +200,9 @@ public class MainActivity extends AppCompatActivity {
                         public void run() {
                             hideLoading();
                             displayTranslation(translatedText);
+
+                            // Saving to firebase
+                            saveToFirebase(textToTranslate,translatedText,selectedLanguage);
                         }
                     });
 
@@ -252,6 +294,72 @@ public class MainActivity extends AppCompatActivity {
     //Toast error messages
     private void showErrors(String errorMsg){
         Toast.makeText(this,errorMsg, Toast.LENGTH_LONG).show();
+    }
+    //Saving translations to firebase
+    private void saveToFirebase(String originalText, String translatedText, String targetLang){
+        TranslationHistory history = new TranslationHistory(originalText, translatedText, "en", targetLang);
+
+         db.collection("translations")
+                .add(history)
+                .addOnSuccessListener(documentReference -> {
+                    history.setDocumentID(documentReference.getId());
+                    historyAdapter.addTranslation(history);
+                    updateHistoryEmptyState();
+                })
+                .addOnFailureListener(e -> {
+                    //Use to log for debugging failures
+                });
+    }
+
+    //Loading Translation history from firebase db
+    private void loadTranslationHistory(){
+        db.collection("translations")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(25) // Only loading the last 25 translations
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<TranslationHistory> historyList = new ArrayList<>();
+                    for (QueryDocumentSnapshot document : queryDocumentSnapshots){
+                        TranslationHistory history =document.toObject(TranslationHistory.class);
+                        history.setDocumentID(document.getId());
+                        historyList.add(history);
+                    }
+                    historyAdapter.updateHistoryList(historyList);
+                    updateHistoryEmptyState();
+                })
+                .addOnFailureListener(e -> {
+                    updateHistoryEmptyState();
+                });
+    }
+
+    //Toggles for history list
+    private void toggleHistory(){
+        isHistoryVisible = !isHistoryVisible;
+
+        if (isHistoryVisible){
+            historyRecycleView.setVisibility(View.VISIBLE);
+            historyToggleBtn.setText("Hide History");
+            updateHistoryEmptyState();
+            hideOutput();
+        } else {
+            historyRecycleView.setVisibility(View.GONE);
+            historyEmptyMessage.setVisibility(View.GONE);
+            historyToggleBtn.setText("Show History");
+
+        }
+    }
+
+    // Updating history empty state
+    private void updateHistoryEmptyState(){
+        if (isHistoryVisible){
+            if(historyAdapter.getItemCount() == 0){
+                historyRecycleView.setVisibility(View.VISIBLE);
+                historyEmptyMessage.setVisibility(View.GONE);
+            }else{
+                historyRecycleView.setVisibility(View.VISIBLE);
+                historyEmptyMessage.setVisibility(View.GONE);
+            }
+        }
     }
 
     @Override

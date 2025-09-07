@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "343316041359",
+    "project_id": "translation-app-dca2e",
+    "storage_bucket": "translation-app-dca2e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:343316041359:android:9dd3055400310139c12afa",
+        "android_client_info": {
+          "package_name": "edu.gatech.seclass.myapplication2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBm6_2Pp6e-V_0fGq3oLOLhpF-8_OcKjbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
