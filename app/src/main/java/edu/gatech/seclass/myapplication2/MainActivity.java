@@ -45,8 +45,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String SPANISH_CODE = "es";
     private static final String CHINESE_CODE = "zh-CN";
     private static final String JAPANESE_CODE = "ja";
+    private static final String FRENCH_CODE = "fr";
     private static final String API_URL = "https://openl-translate.p.rapidapi.com/translate/bulk";
-    private static final String API_KEY = "376d299e55msh833d1e58e318bebp1bd829jsn24d975c74503";
+    private static final String API_KEY = "KEY";
     private static final String API_HOST = "openl-translate.p.rapidapi.com";
 
 
@@ -123,6 +124,8 @@ public class MainActivity extends AppCompatActivity {
             selectedLangauge = CHINESE_CODE;
         } else if (checkedId == R.id.jap_radioButton) {
             selectedLangauge = JAPANESE_CODE;
+        } else if (checkedId == R.id.fr_radioButton) {
+            selectedLangauge = FRENCH_CODE;
         } else {
             selectedLangauge = "";
         }
